@@ -1,6 +1,6 @@
 #include "init.h"
 
-void SysClock_init(void)
+void sysclock_init(void)
 {
     ErrorStatus HSEStartUpStatus;
  
