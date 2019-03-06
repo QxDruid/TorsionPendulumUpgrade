@@ -3,7 +3,9 @@
 int main()
 {
     // Настройка такирование ядра и переферии
-    SysClock_init();
+    sysclock_init();
+    gpio_init();
+    timer_init();
     
     while(1)
     {

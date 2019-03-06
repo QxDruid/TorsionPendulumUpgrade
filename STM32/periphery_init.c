@@ -1,5 +1,18 @@
 #include "init.h"
 
+
+#define APB1_frec 72000000
+#define f_m 2000000 //Гц
+#define t_int 0.00001
+#define pixels 3694
+#define SH_delay 12
+#define ICG_delay 11
+#define fm_delay 3
+#define SH_period 20
+#define ICG_period 50000
+
+
+
 /* Конфигурация прерываний */
 void nvic_init(void)
 {
@@ -52,11 +65,11 @@ void gpio_init(void)
     GPIO_Init(GPIOC, &GPIO_initStruct); 
     
     /*
-             Настройка Выхода Шим для тактирования линейки
+             Настройка Выхода Шим для F_m (TIM1_C1)
 --------------------------------------------------------------------------------
     */
-    // Выход подключен на Pin3 PORTA.
-    GPIO_initStruct.GPIO_Pin = GPIO_Pin_3;
+    // Выход подключен на Pin8 PORTA.
+    GPIO_initStruct.GPIO_Pin = GPIO_Pin_8;
     // Mode: альтернативный Push-Pull выход.
     GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
     // Максимальная скорость 2МГц.
@@ -64,13 +77,25 @@ void gpio_init(void)
     GPIO_Init(GPIOA, &GPIO_initStruct);
     
     /*
-             Пины для IGM и SH
+             Пин  c ШИМ для SH (TIM2_C2)
 --------------------------------------------------------------------------------
     */
-    // Выходы подключены к Pin4 и Pin2 PORTA.
-    GPIO_initStruct.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_2;
+    // Выход подключен к Pin1 PORTA.
+    GPIO_initStruct.GPIO_Pin = GPIO_Pin_1;
     // Mode: Push-Pull выход.
-    GPIO_initStruct.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
+    // Максимальная скорость 2МГц.
+    GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIOA, &GPIO_initStruct);
+    
+    /*
+             Пин  c ШИМ для ICG (TIM3_C1)
+--------------------------------------------------------------------------------
+    */
+    // Выход подключен к Pin6 PORTA.
+    GPIO_initStruct.GPIO_Pin = GPIO_Pin_6;
+    // Mode: Push-Pull выход.
+    GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
     // Максимальная скорость 2МГц.
     GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOA, &GPIO_initStruct);
@@ -87,7 +112,7 @@ void gpio_init(void)
     GPIO_initStruct.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_Init(GPIOA, &GPIO_initStruct);
     // Устанавливаем высокий уровень на линии TX.
-    GPIO_SetBits(GPIOA, GPIO_Pin_9);
+    //GPIO_SetBits(GPIOA, GPIO_Pin_9);
     
     /*
              Настройка пина RX для USART1
@@ -187,27 +212,28 @@ void adc_init(void)
 void timer_init()
 {   
      /*
-             Настройка ШИМ для CLK линейки
+             Настройка ШИМ Таймера TIM1 для F_m
 --------------------------------------------------------------------------------
     
     При частоте APB1 d 36МГц указанные ниже параметры 
-    устанавливают частоту PWM в 1МГц и скважность 50%.
+    устанавливают частоту PWM в 1 МГц и скважность 50%.
     
     */
     // Для генерации PWM включаем к тактированию таймер TIM2. 
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+    TIM_CtrlPWMOutputs(TIM1, ENABLE);
     // Структура инициализации Basic таймера.
     TIM_TimeBaseInitTypeDef timer;
     TIM_TimeBaseStructInit(&timer);
     // Делитель тактовой частоты: 1.
-    timer.TIM_Prescaler = 1;
+    timer.TIM_Prescaler = 2-1;
     // Период 36 тиков.
-    timer.TIM_Period = 35;
+    timer.TIM_Period = APB1_frec/f_m - 1;
     timer.TIM_ClockDivision = 0;
     // Таймер считает на увеличение.
     timer.TIM_CounterMode = TIM_CounterMode_Up;
     // Инициализация таймера.
-    TIM_TimeBaseInit(TIM2, &timer);
+    TIM_TimeBaseInit(TIM1, &timer);
  
     // Структура инициализации PWM
     TIM_OCInitTypeDef timerPWM;
@@ -217,34 +243,98 @@ void timer_init()
     // Разрешен вывод PWM.
     timerPWM.TIM_OutputState = TIM_OutputState_Enable;
     // Количество импульсов до установки Лог.0 (18/36 = 50% скаважность).
-    timerPWM.TIM_Pulse = 17;
+    timerPWM.TIM_Pulse = APB1_frec/(2*f_m);
     // Полярность HIGH (чем выше Pulse тем больще скважность).
-    timerPWM.TIM_OCPolarity = TIM_OCPolarity_High;
+    timerPWM.TIM_OCPolarity = TIM_OCPolarity_Low;
     // Выход PWM устанавливаем на канале 4 таймера TIM2.
-    TIM_OC4Init(TIM2, &timerPWM);
+    TIM_OC1Init(TIM1, &timerPWM);
     // Включаем таймер TIM2
-    TIM_Cmd(TIM2, ENABLE);  
+    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+	TIM_ARRPreloadConfig(TIM1, ENABLE);
+
+	/*	TIM3 enable counter */
+	TIM_Cmd(TIM1, ENABLE); 
+    
 
     /*
-             Настройка таймера для побитного чтения линейки для CLK линейки
+             Настройка таймера TIM2 для SH
 --------------------------------------------------------------------------------    
-        При частоте APB1 36МГц данные параметры устанавливают период
-        через который происходит переполнение таймера в 10 мкс.
-        36МГц/360тиков = 100КГц = 10мкс.
+    Для синхронизации таймер должен тактироваться с частотой F_m
+    соответственно Preskaler = APB1_frec/F_m-1;
+    APB1_Frec = 36000000;
+
+    Минимальное t_int = 10мкс;
+    t_int = period/F_m(МГц)
+    соответсвенно период таймера будет равен 10; 
+
+    */
+    // Подключаем таймер TIM3 к тактированию.
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    // Таймер считает на увеличение.
+    timer.TIM_CounterMode = TIM_CounterMode_Up;
+    // Делитель тактовой частоты: 1.
+    timer.TIM_Prescaler = APB1_frec/f_m-1;
+    // Период 36 тиков.
+    timer.TIM_Period = SH_period - 1;
+    timer.TIM_ClockDivision = 0;
+    // Инициализация TIM2.
+    TIM_TimeBaseInit(TIM2, &timer);
+    
+    // Тип шим с выравниванием по центру.
+    timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
+    // Разрешен вывод PWM.
+    timerPWM.TIM_OutputState = TIM_OutputState_Enable;
+    // Количество импульсов до установки Лог.0 (18/36 = 50% скаважность).
+    timerPWM.TIM_Pulse = (2 * f_m) / 1000000;
+    // Полярность HIGH (чем выше Pulse тем больще скважность).
+    timerPWM.TIM_OCPolarity = TIM_OCPolarity_Low;
+    // Выход PWM устанавливаем на канале 4 таймера TIM2.
+    TIM_OC2Init(TIM2, &timerPWM);
+    // Включаем таймер TIM2
+    TIM_Cmd(TIM2, ENABLE);  
+    TIM_OC2PreloadConfig(TIM2, TIM_OCPreload_Enable);
+	TIM_ARRPreloadConfig(TIM2, ENABLE);
+
+/*
+             Настройка таймера TIM3 для ICG
+--------------------------------------------------------------------------------    
+Всего в линейке считывается 3694 пикселя
+
     */
     // Подключаем таймер TIM3 к тактированию.
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
     // Таймер считает на увеличение.
     timer.TIM_CounterMode = TIM_CounterMode_Up;
     // Делитель тактовой частоты: 1.
-    timer.TIM_Prescaler = 1;
+    timer.TIM_Prescaler = APB1_frec/f_m-1;
     // Период 36 тиков.
-    timer.TIM_Period = 359;
+    timer.TIM_Period = ICG_period-1;
     timer.TIM_ClockDivision = 0;
     // Инициализация TIM3.
     TIM_TimeBaseInit(TIM3, &timer);
-    // Включаем TIM3.
-    TIM_Cmd(TIM3, ENABLE);
-    // Включаем прерывание по сбросу для TIM3.
-    TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
+    
+    // Тип шим с выравниванием по центру.
+    timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
+    // Разрешен вывод PWM.
+    timerPWM.TIM_OutputState = TIM_OutputState_Enable;
+    // Количество импульсов до установки Лог.0 (18/36 = 50% скаважность).
+    timerPWM.TIM_Pulse = (5 * f_m) / 1000000;
+    // Полярность HIGH (чем выше Pulse тем больще скважность).
+    timerPWM.TIM_OCPolarity = TIM_OCPolarity_High;
+    // Выход PWM устанавливаем на канале 4 таймера TIM2.
+    TIM_OC1Init(TIM3, &timerPWM);
+    // Включаем таймер TIM2
+    TIM_OC1PreloadConfig(TIM3, TIM_OCPreload_Enable);
+	TIM_ARRPreloadConfig(TIM3, ENABLE); 
+    
+    /* 	TIM2 enable counter */
+	TIM_Cmd(TIM2, ENABLE);
+
+/* 	TIM3 enable counter */
+	TIM_Cmd(TIM3, ENABLE);
+
+    
+    TIM2->CNT = SH_period - SH_delay;// + (SH_period % 2);
+	TIM3->CNT = ICG_period - ICG_delay;
+	TIM1->CNT = fm_delay;
 }
