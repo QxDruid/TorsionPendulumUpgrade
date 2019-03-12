@@ -23,19 +23,26 @@ int8_t SH_period = 20;
 /* Конфигурация прерываний */
 void nvic_init(void)
 {
-    // Структура инициализации прерывания TIM3
-    NVIC_InitTypeDef NVIC_InitStructure;
-    // Разрешаем прерывание
-    NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
-    // Приоритет прерывания наивысший 
-    // (так как у нас всего 1 прерывание не страшно)
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-    // СубПриоритет наивысший
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-    // Вклчаем прерывание
-    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-    // Функция инициализации
-    NVIC_Init(&NVIC_InitStructure);
+	NVIC_InitTypeDef		NVIC_InitStructure;
+
+	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+
+	/* ICG (TIM3) IRQ */
+	/* Обновление TIM3 (Конец импульса ICG)
+    запускает TIM4 который управляет запуском ADC */
+	NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+	/* ADC-DMA IRQ */
+	/* Окончание передачи DMA1 останавливает TIM4 и ADC1 */
+	NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel1_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
 }
 
 /* Инициализация пинов контроллера */
