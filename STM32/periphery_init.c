@@ -12,7 +12,7 @@
 #define ICG_delay 11
 #define fm_delay 3
 // Период считывания линейки.
-#define ICG_period 50000
+#define ICG_period 65000
 
 // определяет время интеграции t_int.
 // Минимальное время равно 10мкс что соответствует SH_period = 20.
@@ -25,24 +25,43 @@ void nvic_init(void)
 {
 	NVIC_InitTypeDef		NVIC_InitStructure;
 
-	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
 
 	/* ICG (TIM3) IRQ */
 	/* Обновление TIM3 (Конец импульса ICG)
     запускает TIM4 который управляет запуском ADC */
+ 
 	NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
 	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
 
+    
 	/* ADC-DMA IRQ */
 	/* Окончание передачи DMA1 останавливает TIM4 и ADC1 */
+
 	NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel1_IRQn;
 	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
+
+    	/* USART IRQ */
+	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+    
+    	/* (TIM4) ДЛЯ ОТЛАДКИ */
+ 
+	NVIC_InitStructure.NVIC_IRQChannel = TIM4_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+    
 }
 
 /* Инициализация пинов контроллера */
@@ -50,6 +69,12 @@ void gpio_init(void)
 {
     // Подключаем PORTA и PORTC к тактированию.
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOA, ENABLE);  
+    
+    GPIO_InitTypeDef GPIO_initStruct;
+    GPIO_initStruct.GPIO_Pin = GPIO_Pin_13;
+    GPIO_initStruct.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIOC, &GPIO_initStruct);
 }
 
 /* Настройка USART */
@@ -78,13 +103,15 @@ void usart_init(void)
     // Mode: Вход без подтяжки.
     GPIO_initStruct.GPIO_Mode = GPIO_Mode_IN_FLOATING;
     GPIO_Init(GPIOA, &GPIO_initStruct);
-    // Включаем тактирование модуля USART1.
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+
     
     /*
              Настройка параметров USART1
 --------------------------------------------------------------------------------
     */
+        // Включаем тактирование модуля USART1.
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+    
     // Структура инициализации.
     USART_InitTypeDef USART_initStruct = {0};
     // BaudRate: 115200.
@@ -103,6 +130,7 @@ void usart_init(void)
     USART_Init(USART1, &USART_initStruct);
     // Включаем USART1.
     USART_Cmd(USART1, ENABLE);
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
 }
 
 void USARTSend(const unsigned char *pucBuffer, unsigned long ulCount)
@@ -138,20 +166,23 @@ void adc_init(void)
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
     
     // Структура инициализации DMA
+    
     DMA_InitTypeDef DMA_initStruct;
-    DMA_initStruct.DMA_BufferSize = sizeof(CCD_Buffer);
+    DMA_DeInit(DMA1_Channel1);
+    DMA_ClearITPendingBit(DMA1_IT_TC4);
+    DMA_initStruct.DMA_BufferSize = 3694;
     DMA_initStruct.DMA_DIR = DMA_DIR_PeripheralSRC;
-    DMA_initStruct.DMA_MemoryBaseAddr = (uint32_t)CCD_Buffer;
+    DMA_initStruct.DMA_MemoryBaseAddr = (uint32_t)&CCD_Buffer;
     DMA_initStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
     DMA_initStruct.DMA_MemoryInc = ENABLE;
     DMA_initStruct.DMA_Mode = DMA_Mode_Normal;
-    DMA_initStruct.DMA_PeripheralBaseAddr = ADC1->DR;
+    DMA_initStruct.DMA_PeripheralBaseAddr = (uint32_t)&ADC1->DR;
     DMA_initStruct.DMA_PeripheralDataSize = DMA_MemoryDataSize_HalfWord;
     DMA_initStruct.DMA_PeripheralInc = DISABLE;
     DMA_initStruct.DMA_Priority = 0;
     DMA_Init(DMA1_Channel1, &DMA_initStruct);
-    
-    //DMA_Cmd(DMA1_Channel1 , ENABLE ) ;
+    DMA_ITConfig(DMA1_Channel1, DMA_IT_TC, ENABLE);
+    DMA_Cmd(DMA1_Channel1 , ENABLE ) ;
     
     // Заполняем труктуру инициализации
     ADC_InitTypeDef ADC_initStruct;
@@ -165,6 +196,7 @@ void adc_init(void)
     //обработки одного преобразования
     ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_13Cycles5);
     ADC_Init(ADC1, &ADC_initStruct); // Инициализация ADC
+    ADC_ExternalTrigConvCmd(ADC1, ENABLE);
     ADC_DMACmd(ADC1, ENABLE); // ВКлючаем DMA
     ADC_Cmd(ADC1, ENABLE); // Включаем ADC.
     
@@ -304,6 +336,7 @@ void timer_init()
     timerPWM.TIM_Pulse = (5 * f_m) / 1000000;     // Длительность импульса 5мкс.
     timerPWM.TIM_OCPolarity = TIM_OCPolarity_High; // Полярность High
     TIM_OC1Init(TIM3, &timerPWM);
+    TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
     // Включаем пресет таймера TIM3
     TIM_OC1PreloadConfig(TIM3, TIM_OCPreload_Enable);
 	TIM_ARRPreloadConfig(TIM3, ENABLE); 
@@ -334,8 +367,12 @@ void timer_init()
 	timerPWM.TIM_OCPolarity = TIM_OCPolarity_High;
 
 	TIM_OC4Init(TIM4, &timerPWM);
-	TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
-	TIM_ARRPreloadConfig(TIM4, ENABLE);
+	//TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
+	//TIM_ARRPreloadConfig(TIM4, ENABLE);
+    //TIM4 Включается по прерыванию ICG (TIM3);
+    TIM_Cmd(TIM4, DISABLE);
+    //Сообщение в прерывании для отладки
+    TIM_ITConfig(TIM4,TIM_IT_Update, ENABLE);
     
     
     /*
