@@ -18,6 +18,7 @@
 // Минимальное время равно 10мкс что соответствует SH_period = 20.
 // Максимальное время определяется периодом ICG.
 int8_t SH_period = 20;
+// Буфер чения линейки-----------------------------------
 
 /* Конфигурация прерываний */
 void nvic_init(void)
@@ -41,11 +42,7 @@ void nvic_init(void)
 void gpio_init(void)
 {
     // Подключаем PORTA и PORTC к тактированию.
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOA, ENABLE);
-    
-
-    
-   
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOA, ENABLE);  
 }
 
 /* Настройка USART */
@@ -118,6 +115,11 @@ void USARTSend(const unsigned char *pucBuffer, unsigned long ulCount)
 /* Настройка ADC */
 void adc_init(void)
 {
+    GPIO_InitTypeDef initStruct;
+    initStruct.GPIO_Pin = GPIO_Pin_0;
+    initStruct.GPIO_Mode = GPIO_Mode_AF_OD;
+    initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIOA, &initStruct);
     /*
     Устанавливаем предделитель для ADC так как макс частота работы ADC 14МГц,
     а системнаое тактирование установлено на 72МГц. 72/6 = 12МГц.
@@ -125,55 +127,60 @@ void adc_init(void)
     RCC_ADCCLKConfig (RCC_PCLK2_Div6);
     // Подключаем ADC1 к тактированию
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+    // Подключаем DMA1
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+    
+    // Структура инициализации DMA
+    DMA_InitTypeDef DMA_initStruct;
+    DMA_initStruct.DMA_BufferSize = sizeof(CCD_Buffer);
+    DMA_initStruct.DMA_DIR = DMA_DIR_PeripheralSRC;
+    DMA_initStruct.DMA_MemoryBaseAddr = (uint32_t)CCD_Buffer;
+    DMA_initStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+    DMA_initStruct.DMA_MemoryInc = ENABLE;
+    DMA_initStruct.DMA_Mode = DMA_Mode_Normal;
+    DMA_initStruct.DMA_PeripheralBaseAddr = ADC1->DR;
+    DMA_initStruct.DMA_PeripheralDataSize = DMA_MemoryDataSize_HalfWord;
+    DMA_initStruct.DMA_PeripheralInc = DISABLE;
+    DMA_initStruct.DMA_Priority = 0;
+    DMA_Init(DMA1_Channel1, &DMA_initStruct);
+    
+    //DMA_Cmd(DMA1_Channel1 , ENABLE ) ;
     
     // Заполняем труктуру инициализации
     ADC_InitTypeDef ADC_initStruct;
-    // Mode: ADC работают независимо.
-    ADC_initStruct.ADC_Mode = ADC_Mode_Independent;
-    // Align: Данные 12 битного ADC выравниваются вправо.
-    ADC_initStruct.ADC_DataAlign = ADC_DataAlign_Right;
-    // ContinuousMode: Однократное измерение.
-    ADC_initStruct.ADC_ContinuousConvMode = DISABLE;
-    // ExtTrigConv: Отключен внешний триггер преобразования.
-    ADC_initStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
-    // NbrChannel: Количество каналов - 1.
-    ADC_initStruct.ADC_NbrOfChannel= 1;
-    // ScanCOnversion: Нет сканирования каналов.
-    ADC_initStruct.ADC_ScanConvMode = DISABLE;
+    ADC_initStruct.ADC_Mode = ADC_Mode_Independent; // ADC работают независимо.
+    ADC_initStruct.ADC_DataAlign = ADC_DataAlign_Right; //Данные 12 битного ADC выравниваются вправо.
+    ADC_initStruct.ADC_ContinuousConvMode = DISABLE; // Однократное измерение.
+	ADC_initStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T4_CC4; // внешний триггер преобразования на T4C4
+    ADC_initStruct.ADC_NbrOfChannel= 1; // Количество каналов - 1
+    ADC_initStruct.ADC_ScanConvMode = DISABLE; // Нет сканирования каналов.
     //Выбираем канал регулярной группы (Pin A1) и устанавливаем время 
     //обработки одного преобразования
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5);
-    ADC_Init(ADC1, &ADC_initStruct);
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_13Cycles5);
+    ADC_Init(ADC1, &ADC_initStruct); // Инициализация ADC
+    ADC_DMACmd(ADC1, ENABLE); // ВКлючаем DMA
+    ADC_Cmd(ADC1, ENABLE); // Включаем ADC.
     
-    // Включаем ADC.
-    ADC_Cmd(ADC1, ENABLE);
-    // сбрасываем колибровку.
-    ADC_ResetCalibration(ADC1);
-    // Ждем пока калибровка сброситься.
-    while(ADC_GetResetCalibrationStatus(ADC1));
-    // Запускаем новую калибровку.
-    ADC_StartCalibration(ADC1);
-    // Ждем пока закончится
-    while(ADC_GetCalibrationStatus(ADC1));
-    // Запускаем модуль ADC После калибровки
-    ADC_Cmd(ADC1, ENABLE);
+    // Обязательная калибровка ADC.
+    ADC_ResetCalibration(ADC1);  // сбрасываем колибровку.
+    while(ADC_GetResetCalibrationStatus(ADC1)); // Ждем пока калибровка сброситься.
+    ADC_StartCalibration(ADC1);// Запускаем новую калибровку.
+    while(ADC_GetCalibrationStatus(ADC1));// Ждем пока закончится
+    ADC_Cmd(ADC1, ENABLE); // Запускаем модуль ADC После калибровки
 }
 
 /* Настройка таймеров */
 void timer_init()
 {   
-    // Структура инициализации GPIO_PIN.
-    GPIO_InitTypeDef GPIO_initStruct;
+    
+    GPIO_InitTypeDef GPIO_initStruct; // Структура инициализации GPIO_PIN.
      /*
              Настройка Выхода Шим для F_m (TIM1_C1)
 --------------------------------------------------------------------------------
     */
-    // Выход подключен на Pin8 PORTA.
-    GPIO_initStruct.GPIO_Pin = GPIO_Pin_8;
-    // Mode: альтернативный Push-Pull выход.
-    GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
-    // Максимальная скорость 2МГц.
-    GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_initStruct.GPIO_Pin = GPIO_Pin_8; // Выход подключен на Pin8 PORTA.
+    GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP; // альтернативный Push-Pull выход.
+    GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz; // Максимальная скорость 2МГц.
     GPIO_Init(GPIOA, &GPIO_initStruct);
     
       
@@ -181,44 +188,41 @@ void timer_init()
              Настройка Таймера TIM1 для F_m
 --------------------------------------------------------------------------------
     
-    При частоте APB1 36МГц (тактирование таймера 36*2) указанные ниже параметры 
-    устанавливают частоту PWM в 2 МГц и скважность 50%.
+    При частоте APB1 36МГц (тактирование таймера 36*2 = 72 МГц)
+    указанные ниже параметры устанавливают частоту PWM
+    в 2 МГц и скважность 50%.
     */
+    
     // Для генерации PWM включаем к тактированию таймер TIM1. 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
     // Для Advanced таймеров отдельно подлючается выход ШИМ
     TIM_CtrlPWMOutputs(TIM1, ENABLE);
+    
     // Структура инициализации Basic таймера.
     TIM_TimeBaseInitTypeDef timer;
     TIM_TimeBaseStructInit(&timer);
-    // Делитель тактовой частоты: 1.
-    timer.TIM_Prescaler = 2-1;
-    // Период 36 тиков.
-    timer.TIM_Period = APB1_frec/f_m - 1;
-    timer.TIM_ClockDivision = 0;
-    // Таймер считает на увеличение.
-    timer.TIM_CounterMode = TIM_CounterMode_Up;
-    // Инициализация таймера.
-    TIM_TimeBaseInit(TIM1, &timer);
+    
+    timer.TIM_Prescaler = 2-1; // Делитель тактовой частоты: 1.
+    timer.TIM_Period = APB1_frec/f_m - 1; // Расчет периода для частоты 2 Мгц
+    timer.TIM_ClockDivision = 0; // Деление тактовой частоты 0.
+    timer.TIM_CounterMode = TIM_CounterMode_Up; // Таймер считает на увеличение.
+    TIM_TimeBaseInit(TIM1, &timer); // Инициализация таймера.
  
     // Структура инициализации PWM
     TIM_OCInitTypeDef timerPWM;
     TIM_OCStructInit(&timerPWM);
-    // Тип шим с выравниванием по центру.
-    timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
-    // Разрешен вывод PWM.
-    timerPWM.TIM_OutputState = TIM_OutputState_Enable;
-    // Количество импульсов до установки Лог.0 (18/36 = 50% скаважность).
-    timerPWM.TIM_Pulse = APB1_frec/(2*f_m);
-    // Полярность Low (чем ниже Pulse тем больще скважность).
-    timerPWM.TIM_OCPolarity = TIM_OCPolarity_Low;
-    // Выход PWM устанавливаем на канале 1 (ОС1) таймера TIM2.
-    TIM_OC1Init(TIM1, &timerPWM);
+    
+    timerPWM.TIM_OCMode = TIM_OCMode_PWM1; // Тип шим с выравниванием по центру.   
+    timerPWM.TIM_OutputState = TIM_OutputState_Enable; // Разрешен вывод PWM.   
+    timerPWM.TIM_Pulse = APB1_frec/(2*f_m); // 50% скаважность.
+    timerPWM.TIM_OCPolarity = TIM_OCPolarity_Low; // чем ниже Pulse тем больще скважность.
+    TIM_OC1Init(TIM1, &timerPWM);  // Выход PWM устанавливаем на канале 1 (ОС1) таймера TIM2.
+    
     // Включаем пресет таймера TIM1
     TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
 	TIM_ARRPreloadConfig(TIM1, ENABLE);
 
-// Включаем TIM1
+// Включаем TIM1 (Тактирование линейки)
 	TIM_Cmd(TIM1, ENABLE); 
     
 
@@ -226,13 +230,12 @@ void timer_init()
              Пин  c ШИМ для SH (TIM2_C2)
 --------------------------------------------------------------------------------
     */
-    // Выход подключен к Pin1 PORTA.
+    
     GPIO_initStruct.GPIO_Pin = GPIO_Pin_1;
-    // Mode: Push-Pull выход.
     GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
-    // Максимальная скорость 2МГц.
     GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOA, &GPIO_initStruct);
+    
     /*
              Настройка таймера TIM2 для SH
 --------------------------------------------------------------------------------    
@@ -245,29 +248,24 @@ void timer_init()
     соответсвенно период таймера будет равен 10; 
 
     */
+    
     // Подключаем таймер TIM2 к тактированию.
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
-    // Таймер считает на увеличение.
+    
     timer.TIM_CounterMode = TIM_CounterMode_Up;
-    // Делитель тактовой частоты:
     timer.TIM_Prescaler = APB1_frec/f_m-1;
-    // Период таймера задает t_int (минимум 20 тиков = 10мкс)
-    timer.TIM_Period = SH_period - 1;
+    timer.TIM_Period = SH_period - 1;  // Период таймера задает t_int (минимум 20 тиков = 10мкс)
     timer.TIM_ClockDivision = 0;
-    // Инициализация TIM2.
     TIM_TimeBaseInit(TIM2, &timer);
     
-    // Тип шим с выравниванием по центру.
+    // Инициализация ШИМ
     timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
-    // Разрешен вывод PWM.
     timerPWM.TIM_OutputState = TIM_OutputState_Enable;
-    // Длительность SH = 2 мкс -> pulse = 2 µs * CCD_fm, MHz.
-    timerPWM.TIM_Pulse = (2 * f_m) / 1000000;
-    // Полярность Low.
+    
+    timerPWM.TIM_Pulse = (2 * f_m) / 1000000; // Длительность SH = 2 мкс -> pulse = 2 µs * CCD_fm, MHz.
     timerPWM.TIM_OCPolarity = TIM_OCPolarity_Low;
-    // Выход PWM устанавливаем на канале 2 таймера TIM2.
     TIM_OC2Init(TIM2, &timerPWM);
-    // Включаем Пресет таймеа  
+    // Включаем пресет таймера
     TIM_OC2PreloadConfig(TIM2, TIM_OCPreload_Enable);
 	TIM_ARRPreloadConfig(TIM2, ENABLE);
 
@@ -276,11 +274,8 @@ void timer_init()
              Пин  c ШИМ для ICG (TIM3_C1)
 --------------------------------------------------------------------------------
     */
-    // Выход подключен к Pin6 PORTA.
     GPIO_initStruct.GPIO_Pin = GPIO_Pin_6;
-    // Mode: Push-Pull выход.
     GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
-    // Максимальная скорость 2МГц.
     GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOA, &GPIO_initStruct);
 /*
@@ -289,37 +284,70 @@ void timer_init()
  */
     // Подключаем таймер TIM3 к тактированию.
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
-    // Таймер считает на увеличение.
+
     timer.TIM_CounterMode = TIM_CounterMode_Up;
-    // Делитель тактовой частоты:
     timer.TIM_Prescaler = APB1_frec/f_m-1;
-    // Период равен периоду считывания линейки
     timer.TIM_Period = ICG_period-1;
     timer.TIM_ClockDivision = 0;
     // Инициализация TIM3.
     TIM_TimeBaseInit(TIM3, &timer);
     
-    // Тип шим с выравниванием по центру.
     timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
-    // Разрешен вывод PWM.
     timerPWM.TIM_OutputState = TIM_OutputState_Enable;
-    // Длительность импульса 5мкс.
-    timerPWM.TIM_Pulse = (5 * f_m) / 1000000;
-    // Полярность HIGH (чем выше Pulse тем больще скважность).
-    timerPWM.TIM_OCPolarity = TIM_OCPolarity_High;
-    // Выход PWM устанавливаем на канале 1 таймера TIM3.
+    timerPWM.TIM_Pulse = (5 * f_m) / 1000000;     // Длительность импульса 5мкс.
+    timerPWM.TIM_OCPolarity = TIM_OCPolarity_High; // Полярность High
     TIM_OC1Init(TIM3, &timerPWM);
     // Включаем пресет таймера TIM3
     TIM_OC1PreloadConfig(TIM3, TIM_OCPreload_Enable);
 	TIM_ARRPreloadConfig(TIM3, ENABLE); 
     
-    /* 	Запуск таймеров */
+    /*
+    Настройка таймера TIM4 для запуска ADC
+--------------------------------------------------------------------------------    
+ */
+ 	GPIO_initStruct.GPIO_Pin = GPIO_Pin_9;
+  	GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
+	GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIOB, &GPIO_initStruct);
+ 
+    // Подключаем таймер TIM4 к тактированию.
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+
+    timer.TIM_CounterMode = TIM_CounterMode_Up;
+    timer.TIM_Prescaler = 0;
+    timer.TIM_Period = 4*APB1_frec/f_m-1;  // Период равен 4 тактам f_m
+    timer.TIM_ClockDivision = 0;
+    // Инициализация TIM4.
+    TIM_TimeBaseInit(TIM4, &timer);
+    
+    // Инициализация ШИМ
+    timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
+	timerPWM.TIM_OutputState = TIM_OutputState_Enable;
+	timerPWM.TIM_Pulse = APB1_frec / (2*f_m);
+	timerPWM.TIM_OCPolarity = TIM_OCPolarity_High;
+
+	TIM_OC4Init(TIM4, &timerPWM);
+	TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
+	TIM_ARRPreloadConfig(TIM4, ENABLE);
+    
+    
+    /*
+            ЗАПУСК И СИНХРОНИЗАЦИЯ ТАЙМЕРОВ
+ -------------------------------------------------------------------------------
+    */
+    
+    // Запуск таймерв SH и ICG.
 	TIM_Cmd(TIM2, ENABLE);
 	TIM_Cmd(TIM3, ENABLE);
 
 // Установка задержек между импульсами таймеров для соответсвия 
 // Timing requiremets линейки TCD1304AP
-    TIM2->CNT = SH_period - SH_delay;// + (SH_period % 2);
+// Устанавливаем таймеры на x_delay тиков перед переключением
+// Т.К SH полярность Low а ICG - High. SH переключится в 0 а ICG в 1
+// (На миксросхеме 74HC04 произойдет инверсия и все станет как в datasheet)
+// Разница в x_delay между ICG и SH в 1 тик что дает задержку в 500нс.
+// fm_delay подбирается так, чтоб уровень ICG Падал при высоком уровне f_m.
+    TIM2->CNT = SH_period - SH_delay;  
 	TIM3->CNT = ICG_period - ICG_delay;
 	TIM1->CNT = fm_delay;
 }
