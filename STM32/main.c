@@ -4,9 +4,10 @@ volatile uint8_t data_ready_flag = 0;
 volatile uint8_t CCD_read_flag = 0;
 
 // Буфер чения линейки
-volatile uint16_t CCD_Buffer[3694]; 
+__IO uint16_t CCD_Buffer[3694]; 
 volatile uint8_t RX_data = '\0';
 char USART_buffer[50] = {'\0'};
+char USART_data[5] = {'\0'};
     
 int main()
 {
@@ -40,9 +41,9 @@ int main()
                 for(int i = 0; i < 3694; i++)
                 {
             // Записываем значение int в строку вывода как массив char
-                    sprintf(USART_buffer, "%d\n", CCD_Buffer[i]);
+                sprintf(USART_data, "%d\n", CCD_Buffer[i]);
                 // Отправляем данные
-                    USARTSend(USART_buffer, sizeof(USART_buffer));
+                USARTSend(USART_data, sizeof(USART_data));
                 }  
             }
             RX_data = '\0';
@@ -50,15 +51,14 @@ int main()
 
         if(data_ready_flag == 1)
         {
-
             for(int i = 0; i < 3694; i++)
             {
             // Записываем значение int в строку вывода как массив char
-                sprintf(USART_buffer, "%d\n", CCD_Buffer[i]);
+                sprintf(USART_data, "%d.", CCD_Buffer[i]);
                 // Отправляем данные
-                USARTSend(USART_buffer, sizeof(USART_buffer));
+                USARTSend(USART_data, sizeof(USART_data));
             }
-
+            data_ready_flag = 0;
         }
             
     }

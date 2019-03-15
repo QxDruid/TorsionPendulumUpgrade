@@ -54,21 +54,13 @@ void nvic_init(void)
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
     
-    	/* (TIM4) ДЛЯ ОТЛАДКИ */
- 
-	NVIC_InitStructure.NVIC_IRQChannel = TIM4_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-    
 }
 
 /* Инициализация пинов контроллера */
 void gpio_init(void)
 {
     // Подключаем PORTA и PORTC к тактированию.
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOA, ENABLE);  
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);  
     
     GPIO_InitTypeDef GPIO_initStruct;
     GPIO_initStruct.GPIO_Pin = GPIO_Pin_13;
@@ -152,7 +144,7 @@ void adc_init(void)
 {
     GPIO_InitTypeDef initStruct;
     initStruct.GPIO_Pin = GPIO_Pin_0;
-    initStruct.GPIO_Mode = GPIO_Mode_AF_OD;
+    initStruct.GPIO_Mode = GPIO_Mode_AIN;
     initStruct.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOA, &initStruct);
     /*
@@ -169,17 +161,18 @@ void adc_init(void)
     
     DMA_InitTypeDef DMA_initStruct;
     DMA_DeInit(DMA1_Channel1);
-    DMA_ClearITPendingBit(DMA1_IT_TC4);
+    DMA_ClearITPendingBit(DMA1_IT_TC1);
     DMA_initStruct.DMA_BufferSize = 3694;
     DMA_initStruct.DMA_DIR = DMA_DIR_PeripheralSRC;
     DMA_initStruct.DMA_MemoryBaseAddr = (uint32_t)&CCD_Buffer;
     DMA_initStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
-    DMA_initStruct.DMA_MemoryInc = ENABLE;
-    DMA_initStruct.DMA_Mode = DMA_Mode_Normal;
+    DMA_initStruct.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    DMA_initStruct.DMA_Mode = DMA_Mode_Circular;
     DMA_initStruct.DMA_PeripheralBaseAddr = (uint32_t)&ADC1->DR;
-    DMA_initStruct.DMA_PeripheralDataSize = DMA_MemoryDataSize_HalfWord;
-    DMA_initStruct.DMA_PeripheralInc = DISABLE;
-    DMA_initStruct.DMA_Priority = 0;
+    DMA_initStruct.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+    DMA_initStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    DMA_initStruct.DMA_Priority = DMA_Priority_High;
+    DMA_initStruct.DMA_M2M = DMA_M2M_Disable;
     DMA_Init(DMA1_Channel1, &DMA_initStruct);
     DMA_ITConfig(DMA1_Channel1, DMA_IT_TC, ENABLE);
     DMA_Cmd(DMA1_Channel1 , ENABLE ) ;
@@ -189,14 +182,15 @@ void adc_init(void)
     ADC_initStruct.ADC_Mode = ADC_Mode_Independent; // ADC работают независимо.
     ADC_initStruct.ADC_DataAlign = ADC_DataAlign_Right; //Данные 12 битного ADC выравниваются вправо.
     ADC_initStruct.ADC_ContinuousConvMode = DISABLE; // Однократное измерение.
-	ADC_initStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T4_CC4; // внешний триггер преобразования на T4C4
+	ADC_initStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T4_CC4; // внешний триггер по захвату на канале T4C4
     ADC_initStruct.ADC_NbrOfChannel= 1; // Количество каналов - 1
     ADC_initStruct.ADC_ScanConvMode = DISABLE; // Нет сканирования каналов.
     //Выбираем канал регулярной группы (Pin A1) и устанавливаем время 
     //обработки одного преобразования
     ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_13Cycles5);
-    ADC_Init(ADC1, &ADC_initStruct); // Инициализация ADC
     ADC_ExternalTrigConvCmd(ADC1, ENABLE);
+    ADC_Init(ADC1, &ADC_initStruct); // Инициализация ADC
+    
     ADC_DMACmd(ADC1, ENABLE); // ВКлючаем DMA
     ADC_Cmd(ADC1, ENABLE); // Включаем ADC.
     
@@ -241,7 +235,7 @@ void timer_init()
     TIM_TimeBaseInitTypeDef timer;
     TIM_TimeBaseStructInit(&timer);
     
-    timer.TIM_Prescaler = 2-1; // Делитель тактовой частоты: 1.
+    timer.TIM_Prescaler = 1-1; // Делитель тактовой частоты: 1.
     timer.TIM_Period = APB1_frec/f_m - 1; // Расчет периода для частоты 2 Мгц
     timer.TIM_ClockDivision = 0; // Деление тактовой частоты 0.
     timer.TIM_CounterMode = TIM_CounterMode_Up; // Таймер считает на увеличение.
@@ -347,7 +341,7 @@ void timer_init()
  */
  	GPIO_initStruct.GPIO_Pin = GPIO_Pin_9;
   	GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF_PP;
-	GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_initStruct.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_Init(GPIOB, &GPIO_initStruct);
  
     // Подключаем таймер TIM4 к тактированию.
@@ -363,16 +357,16 @@ void timer_init()
     // Инициализация ШИМ
     timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
 	timerPWM.TIM_OutputState = TIM_OutputState_Enable;
-	timerPWM.TIM_Pulse = APB1_frec / (2*f_m);
+	timerPWM.TIM_Pulse = APB1_frec / (2*f_m)-1;
 	timerPWM.TIM_OCPolarity = TIM_OCPolarity_High;
 
+    //TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
 	TIM_OC4Init(TIM4, &timerPWM);
-	//TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
-	//TIM_ARRPreloadConfig(TIM4, ENABLE);
+	TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
+	TIM_ARRPreloadConfig(TIM4, ENABLE);
     //TIM4 Включается по прерыванию ICG (TIM3);
     TIM_Cmd(TIM4, DISABLE);
     //Сообщение в прерывании для отладки
-    TIM_ITConfig(TIM4,TIM_IT_Update, ENABLE);
     
     
     /*
