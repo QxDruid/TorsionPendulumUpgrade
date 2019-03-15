@@ -1,4 +1,4 @@
-#include "init.h"
+#include "main.h"
 
 void sysclock_init(void)
 {
@@ -42,11 +42,11 @@ void sysclock_init(void)
         потому что на выходе APB1 должно быть не более 36МГц (смотри схему) */
         RCC_PCLK1Config( RCC_HCLK_Div2);
         /* СЛЕДУЕТ ПОМНИТЬ ЧТО ЕСЛИ ДЕЛИТЕЛЬ APB |= 1 ТО ДЛЯ ИАКТИРОВАНИЯ ТАЙМЕРОВ
-        ЧАСТОТА УМНОЖАЕТСЯ НА 2 (Т.Е. ЧАСТОТА TIM2.3.4 = 72Мгц) *\
+        ЧАСТОТА УМНОЖАЕТСЯ НА 2 (Т.Е. ЧАСТОТА TIM2.3.4 = 72Мгц) */
  
-        /* PLLCLK = 8MHz * 9 = 72 MHz */
-        /* Указываем PLL от куда брать частоту (RCC_PLLSource_HSE_Div1) и на сколько ее умножать (RCC_PLLMul_9) */
-        /* PLL может брать частоту с кварца как есть (RCC_PLLSource_HSE_Div1) или поделенную на 2 (RCC_PLLSource_HSE_Div2). Смотри схему */
+        /* PLLCLK = 8MHz * 9 = 72 MHz
+        Указываем PLL от куда брать частоту (RCC_PLLSource_HSE_Div1) и на сколько ее умножать (RCC_PLLMul_9) 
+        PLL может брать частоту с кварца как есть (RCC_PLLSource_HSE_Div1) или поделенную на 2 (RCC_PLLSource_HSE_Div2). Смотри схему */
         RCC_PLLConfig(RCC_PLLSource_HSE_Div1, RCC_PLLMul_9);
  
         /* Включаем PLL */
