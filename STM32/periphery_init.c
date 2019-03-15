@@ -1,24 +1,4 @@
-#include "init.h"
-
-// Частота тактирования таймеров
-#define APB1_frec 72000000
-// Частота тактирования линейки f_m, Гц
-#define f_m 2000000 
-// Количество пикселей в линейке
-#define CCD_size 3694
-//Задержки в импульсах при запуске таймеров для вормирования 
-// Timing requirements пзс линейки.
-#define SH_delay 12
-#define ICG_delay 11
-#define fm_delay 3
-// Период считывания линейки.
-#define ICG_period 65000
-
-// определяет время интеграции t_int.
-// Минимальное время равно 10мкс что соответствует SH_period = 20.
-// Максимальное время определяется периодом ICG.
-int8_t SH_period = 20;
-// Буфер чения линейки-----------------------------------
+#include "main.h"
 
 /* Конфигурация прерываний */
 void nvic_init(void)
@@ -226,16 +206,14 @@ void timer_init()
     в 2 МГц и скважность 50%.
     */
     
-    // Для генерации PWM включаем к тактированию таймер TIM1. 
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
-    // Для Advanced таймеров отдельно подлючается выход ШИМ
-    TIM_CtrlPWMOutputs(TIM1, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE); // Для генерации PWM включаем к тактированию таймер TIM1. 
+    TIM_CtrlPWMOutputs(TIM1, ENABLE); // Для Advanced таймеров отдельно подлючается выход ШИМ
     
     // Структура инициализации Basic таймера.
     TIM_TimeBaseInitTypeDef timer;
     TIM_TimeBaseStructInit(&timer);
     
-    timer.TIM_Prescaler = 1-1; // Делитель тактовой частоты: 1.
+    timer.TIM_Prescaler = 1-1; // Делитель тактовой частоты: 0.
     timer.TIM_Period = APB1_frec/f_m - 1; // Расчет периода для частоты 2 Мгц
     timer.TIM_ClockDivision = 0; // Деление тактовой частоты 0.
     timer.TIM_CounterMode = TIM_CounterMode_Up; // Таймер считает на увеличение.
@@ -255,11 +233,11 @@ void timer_init()
     TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
 	TIM_ARRPreloadConfig(TIM1, ENABLE);
 
-// Включаем TIM1 (Тактирование линейки)
+    // Включаем TIM1 (Тактирование линейки)
 	TIM_Cmd(TIM1, ENABLE); 
     
 
-/*
+     /*
              Пин  c ШИМ для SH (TIM2_C2)
 --------------------------------------------------------------------------------
     */
@@ -279,11 +257,9 @@ void timer_init()
     Минимальное t_int = 10мкс;
     t_int = period/F_m(МГц)
     соответсвенно период таймера будет равен 10; 
-
     */
     
-    // Подключаем таймер TIM2 к тактированию.
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE); // Подключаем таймер TIM2 к тактированию.
     
     timer.TIM_CounterMode = TIM_CounterMode_Up;
     timer.TIM_Prescaler = APB1_frec/f_m-1;
@@ -357,7 +333,7 @@ void timer_init()
     // Инициализация ШИМ
     timerPWM.TIM_OCMode = TIM_OCMode_PWM1;
 	timerPWM.TIM_OutputState = TIM_OutputState_Enable;
-	timerPWM.TIM_Pulse = APB1_frec / (2*f_m)-1;
+	timerPWM.TIM_Pulse = 2*APB1_frec /f_m-1;
 	timerPWM.TIM_OCPolarity = TIM_OCPolarity_High;
 
     //TIM_ClearITPendingBit(TIM4, TIM_IT_Update);

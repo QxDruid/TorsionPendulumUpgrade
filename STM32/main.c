@@ -1,10 +1,14 @@
-#include "init.h"
+#include "main.h"
 
-volatile uint8_t data_ready_flag = 0;
-volatile uint8_t CCD_read_flag = 0;
 
-// Буфер чения линейки
-__IO uint16_t CCD_Buffer[3694]; 
+volatile uint8_t data_ready_flag = 0; // Флаг окончания чтения линейки
+volatile uint8_t CCD_read_flag = 0; // Флаг начала чтения линейки
+__IO uint16_t CCD_Buffer[3694]; // Буфер чения линейки
+
+/* SH_period определяет время интеграции t_int.
+ Минимальное время равно 10мкс что соответствует SH_period = 20.
+ Максимальное время определяется периодом ICG.*/
+int8_t SH_period = 20;
 volatile uint8_t RX_data = '\0';
 char USART_buffer[50] = {'\0'};
 char USART_data[5] = {'\0'};
@@ -33,19 +37,9 @@ int main()
             
             if(RX_data == 'g')
             {    
-                CCD_read_flag = 1;
-                GPIOC->ODR ^= GPIO_Pin_13;   
+                CCD_read_flag = 1;  
             }
-            if(RX_data == 't')
-            {    
-                for(int i = 0; i < 3694; i++)
-                {
-            // Записываем значение int в строку вывода как массив char
-                sprintf(USART_data, "%d\n", CCD_Buffer[i]);
-                // Отправляем данные
-                USARTSend(USART_data, sizeof(USART_data));
-                }  
-            }
+
             RX_data = '\0';
         }
 
