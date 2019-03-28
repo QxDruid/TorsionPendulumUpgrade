@@ -1,6 +1,20 @@
 #ifndef INITH
 #define INITH
 
+/*
+
+        Pin description
+================================================
+    F_m     PA8     Tim1_C1
+    ICG     PA6     Tim3_C1
+    SH      PA1     Tim2_C2
+    OS      PA0     ADC Tim4_C4
+    TX      PA9
+    RX      PA10
+================================================
+*/
+
+
 #include "stm32f10x.h"
 #include "stm32f10x_rcc.h"
 #include "stm32f10x_gpio.h"
@@ -26,6 +40,7 @@ extern volatile uint16_t CCD_Buffer[3694];
 extern volatile uint8_t RX_data;
 extern volatile uint8_t data_ready_flag;
 extern volatile uint8_t CCD_read_flag;
+extern volatile uint8_t CCD_get_flag; 
 
 void sysclock_init(void);
 void nvic_init(void);

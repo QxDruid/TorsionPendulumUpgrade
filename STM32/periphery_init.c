@@ -167,7 +167,7 @@ void adc_init(void)
     ADC_initStruct.ADC_ScanConvMode = DISABLE; // Нет сканирования каналов.
     //Выбираем канал регулярной группы (Pin A1) и устанавливаем время 
     //обработки одного преобразования
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_13Cycles5);
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_7Cycles5);
     ADC_ExternalTrigConvCmd(ADC1, ENABLE);
     ADC_Init(ADC1, &ADC_initStruct); // Инициализация ADC
     
@@ -324,7 +324,7 @@ void timer_init()
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
 
     timer.TIM_CounterMode = TIM_CounterMode_Up;
-    timer.TIM_Prescaler = 0;
+    timer.TIM_Prescaler = 1-1;
     timer.TIM_Period = 4*APB1_frec/f_m-1;  // Период равен 4 тактам f_m
     timer.TIM_ClockDivision = 0;
     // Инициализация TIM4.

@@ -32,8 +32,8 @@ int main()
         if(RX_data != '\0')
         {
                         
-            sprintf(USART_buffer, "data is - %c\r\n", RX_data);
-            USARTSend(USART_buffer, sizeof(USART_buffer)); 
+            sprintf(USART_buffer, "data is - %c\n", RX_data);
+            USARTSend(USART_buffer, sizeof("data is - g\n")-1); 
             
             if(RX_data == 'g')
             {    
@@ -45,13 +45,15 @@ int main()
 
         if(data_ready_flag == 1)
         {
-            for(int i = 0; i < 3694; i++)
+            USARTSend("begin\n", sizeof("begin\n")-1);
+            for(int i = 32; i < CCD_size; i++)
             {
             // Записываем значение int в строку вывода как массив char
-                sprintf(USART_data, "%d.", CCD_Buffer[i]);
+                sprintf(USART_data, "%d\n", CCD_Buffer[i]);
                 // Отправляем данные
                 USARTSend(USART_data, sizeof(USART_data));
             }
+            USARTSend("end\n", sizeof("end\n"));
             data_ready_flag = 0;
         }
             
