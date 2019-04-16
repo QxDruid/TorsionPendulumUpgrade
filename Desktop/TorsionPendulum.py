@@ -12,10 +12,10 @@ import pyqtgraph as pg
 class MainWindow(QtWidgets.QMainWindow):
 
     serial = QSerialPort()
-    
+    # timer = QtCore.QElapsedTimer() // FPS TEST
     # new signals
     data_isReady_signal = pyqtSignal()
-
+    get_data_signal = pyqtSignal()
 
     # data variables
     x = np.arange(0, 3648, 1)
@@ -23,6 +23,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # flags
     data_flag = False
+    start_flag = False
     begin = 0
     
     def __init__(self):
@@ -30,9 +31,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.serial = QSerialPort(self)
-
-        self.serial.setBaudRate(QSerialPort.Baud9600) # По умолчанию для отладки
-        self.serial.setPortName("COM6")
+        self.timer = QtCore.QElapsedTimer()
+        
+        
         self.graphInit()
         self.getBaudRate()
         self.getAvaliablePorts()
@@ -44,10 +45,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.serial.readyRead.connect(self.serialRead_slot)
         self.data_isReady_signal.connect(self.plotUpdate)
+        self.get_data_signal.connect(self.getOnce_slot)
+
+        
 
     def plotUpdate(self):
-        #print(self.y)
         self.ui.graphicsView.plot(self.y, pen='k', symbol='o', symbolPen='k', symbolSize=0, clear=True)
+        #print(round(1/(self.timer.elapsed()/1000),1))  // FPS TEST
+        if self.start_flag == True:
+            self.get_data_signal.emit()
+            #self.timer.start() // FPS TEST 
+
 
     def graphInit(self):
         self.ui.graphicsView.setBackground('w') # backgroung color
@@ -55,12 +63,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # X axis
         self.ui.graphicsView.setLabel('bottom', 'Position', color='k', **{'font-size':'12pt'}) # label
         self.ui.graphicsView.getAxis('bottom').setPen(pg.mkPen(color='k', width = 1)) # axis style
-        self.ui.graphicsView.setXRange(0, 520) # axis size
+        self.ui.graphicsView.setXRange(0, 3648) # axis size
 
         # Y axis
         self.ui.graphicsView.setLabel('left', 'Intensity', color='k', **{'font-size':'12pt'})
         self.ui.graphicsView.getAxis('left').setPen(pg.mkPen(color='k', width = 1))
-        self.ui.graphicsView.setYRange( 0, 260)
+        self.ui.graphicsView.setYRange( 0, 4096)
 
     def getAvaliablePorts(self):
         ports = QSerialPortInfo.availablePorts()
@@ -102,6 +110,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.statusbar.showMessage("BaudRate is: {}".format(menuItem))
 
     def slotConnect(self):
+        self.serial.setBaudRate(QSerialPort.Baud115200) 
         self.serial.close()
         self.serial.setDataBits(QSerialPort.Data8)
         self.serial.setParity(QSerialPort.NoParity)
@@ -119,23 +128,27 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.data_flag = 0
                 self.data_isReady_signal.emit()
             if self.data_flag == 1:
-                self.y.append(int(str(tmpString.data(), encoding='utf-8').replace("\n","")))
+                try:
+                    self.y.append(int(str(tmpString.data(), encoding='utf-8').replace("\n","")))
+                except:
+                    self.y.append(0)
+                
+                #self.y.append(tmpString)
             if tmpString == b'begin\n':
                 self.data_flag = 1
                 self.y = []
-
-
-                
-         
+                self.serial.write('n'.encode())
+    
         
     def getOnce_slot(self):
         self.serial.write('g'.encode())
 
     def start_slot(self):
-        self.serial.write('s'.encode())
+        self.start_flag = True
+        self.serial.write('g'.encode())
 
     def stop_slot(self):
-        self.serial.write('t'.encode())
+        self.start_flag = False
 
 app = QtWidgets.QApplication([])
 application = MainWindow()
