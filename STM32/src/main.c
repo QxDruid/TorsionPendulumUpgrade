@@ -10,7 +10,7 @@
 volatile uint8_t data_ready_flag = 0; // Флаг окончания чтения линейки
 volatile uint8_t CCD_read_flag = 0; // Флаг начала чтения линейки
 __IO uint16_t CCD_Buffer[3694]; // Буфер чения линейки
-uint8_t  Tx_Buffer[TX_BUFFER_SIZE]; // буфер передачи
+uint8_t  USB_Tx_Buffer[TX_BUFFER_SIZE]; // буфер передачи
 char flag = 0; // Флаг передачи данных
 volatile uint8_t RX_data = '\0';
 
@@ -61,23 +61,23 @@ int main(void)
             data_ready_flag = 0;
             
            // USB_Send_Str("begin\n", 6);
-            block_transfer("begin\n", 6);
+            USB_Send("begin\n", 6);
 
             uint16_t i = 32;
             while(i < (CCD_size-15))
             {
                 
                 delay(5000);
-                sprintf(Tx_Buffer, "%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n", CCD_Buffer[i] , CCD_Buffer[i+1], CCD_Buffer[i+2], 
+                sprintf(USB_Tx_Buffer, "%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n", CCD_Buffer[i] , CCD_Buffer[i+1], CCD_Buffer[i+2], 
                             CCD_Buffer[i+3], CCD_Buffer[i+4] , CCD_Buffer[i+5], CCD_Buffer[i+6], CCD_Buffer[i+7],
                             CCD_Buffer[i+8] , CCD_Buffer[i+9], CCD_Buffer[i+10], CCD_Buffer[i+11]);
                 
-                block_transfer(Tx_Buffer, 60);
+                USB_Send(USB_Tx_Buffer, 60);
                 i += 12;                
             }
             
              delay(5000);
-            block_transfer("end\n", 4);
+            USB_Send("end\n", 4);
             // USB_Send_Str("end\n", 4);  
 
             
@@ -91,15 +91,7 @@ void delay(uint32_t len)
 
 }
 
-void LedInit(void)
-{
-    RCC_APB2PeriphClockCmd((RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB), ENABLE);
-    GPIO_InitTypeDef  GPIO_InitStructure;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-}
+
 #ifdef USE_FULL_ASSERT
 /*******************************************************************************
 * Function Name  : assert_failed

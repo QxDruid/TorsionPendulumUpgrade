@@ -60,7 +60,7 @@ extern volatile uint8_t RX_data;
 void EP1_IN_Callback (void)
 {
     //Handle_USBAsynchXfer();
-    void send_a_transaction(void);
+    void USB_Send_Transaction(void);
 }
 
 /*******************************************************************************
@@ -109,7 +109,7 @@ void SOF_Callback(void)
       
       /* Check the data to be sent through IN pipe */
 
-      Handle_USBAsynchXfer();
+      //USB_Send_Transaction();
 
     }
   }  

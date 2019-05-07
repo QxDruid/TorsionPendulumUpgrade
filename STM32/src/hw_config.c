@@ -171,68 +171,6 @@ void USB_Cable_Config (FunctionalState NewState)
   }
 }
 
-/*******************************************************************************
-* Function Name  : Handle_USBAsynchXfer.
-* Description    : send data to USB.
-* Input          : None.
-* Return         : none.
-*******************************************************************************/
-
-
-
-void Handle_USBAsynchXfer (void)
-{
-  
-  uint16_t USB_Tx_ptr;
-  uint16_t USB_Tx_length;
-  
-  if(USB_Tx_State != 1)
-  {
-    if (USART_Rx_ptr_out == TX_BUFFER_SIZE)
-    {
-      USART_Rx_ptr_out = 0;
-    }
-    
-    if(USART_Rx_ptr_out == USART_Rx_ptr_in) 
-    {
-      USB_Tx_State = 0; 
-      return;
-    }
-    
-    if(USART_Rx_ptr_out > USART_Rx_ptr_in) 
-    { 
-      USART_Rx_length = TX_BUFFER_SIZE - USART_Rx_ptr_out;
-    }
-    else 
-    {
-      USART_Rx_length = USART_Rx_ptr_in - USART_Rx_ptr_out;
-    }
-    
-    if (USART_Rx_length > VIRTUAL_COM_PORT_DATA_SIZE)
-    {
-      USB_Tx_ptr = USART_Rx_ptr_out;
-      USB_Tx_length = VIRTUAL_COM_PORT_DATA_SIZE;
-      
-      USART_Rx_ptr_out += VIRTUAL_COM_PORT_DATA_SIZE;	
-      USART_Rx_length -= VIRTUAL_COM_PORT_DATA_SIZE;	
-    }
-    else
-    {
-      USB_Tx_ptr = USART_Rx_ptr_out;
-      USB_Tx_length = USART_Rx_length;
-      
-      USART_Rx_ptr_out += USART_Rx_length;
-      USART_Rx_length = 0;
-    }
-    USB_Tx_State = 1; 
-    UserToPMABufferCopy(&Tx_Buffer[USB_Tx_ptr], ENDP1_TXADDR, USB_Tx_length);
-    SetEPTxCount(ENDP1, USB_Tx_length);
-    SetEPTxValid(ENDP1); 
-  }  
-  
-}
-
-
 
 /*******************************************************************************
 * Function Name  : Get_SerialNum.
@@ -290,32 +228,12 @@ static void IntToUnicode (uint32_t value , uint8_t *pbuf , uint8_t len)
     (copy user buffer to USB library transmit buffer)
 */
 
-void USB_Send_Char(char data)
-{
-  Tx_Buffer[USART_Rx_ptr_in] = data;
-  USART_Rx_ptr_in++;
 
-  /* To avoid buffer overflow */
-  if(USART_Rx_ptr_in >= TX_BUFFER_SIZE)
-  {
-    USART_Rx_ptr_in = 0;
-  }
-}
-
-void USB_Send_Str(char *data, uint32_t length)
-{
-    for(uint32_t i = 0; i < length; i++)
-    {
-          USB_Send_Char(data[i]);
-    }
-    USB_Tx_State = 0; 
-}
-    
 
 	uint8_t * USB_Tx_ptr;
 	uint16_t USB_Tx_length;
 
-void send_a_transaction(void)
+void USB_Send_Transaction(void)
 {
   uint16_t send_len;
 
@@ -331,13 +249,13 @@ void send_a_transaction(void)
   }
 }
 
-void block_transfer( uint8_t * buf, uint16_t len )
+void USB_Send( uint8_t  * buf, uint16_t len )
 {
 	if ( len == 0 ) return;
 
 	USB_Tx_ptr    = buf;
 	USB_Tx_length = len;
 
-	send_a_transaction();
+	USB_Send_Transaction();
 }
 
