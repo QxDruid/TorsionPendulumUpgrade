@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtSerialPort import QSerialPort, QSerialPortInfo
 import sys
 import numpy as np
+#from scipy.signal import savgol_filter
 import pyqtgraph as pg
 
 
@@ -13,31 +14,30 @@ class MainWindow(QtWidgets.QMainWindow):
 
     serial = QSerialPort()
     # timer = QtCore.QElapsedTimer() // FPS TEST
+
     # new signals
     data_isReady_signal = pyqtSignal()
     get_data_signal = pyqtSignal()
 
     # data variables
-    x = np.arange(0, 3648, 1)
+    disp = 0.02741
+    x = np.arange(0, 3648*disp, disp)
     y = []
 
     # flags
     data_flag = False
     start_flag = False
     begin = 0
-    
+
     def __init__(self):
         super(MainWindow, self).__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.serial = QSerialPort(self)
         self.timer = QtCore.QElapsedTimer()
-        
-        
+          
         self.graphInit()
-        self.getBaudRate()
         self.getAvaliablePorts()
-
 
         self.ui.pushButton_Get.clicked.connect(self.getOnce_slot)
         self.ui.pushButton_Start.clicked.connect(self.start_slot)
@@ -47,10 +47,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data_isReady_signal.connect(self.plotUpdate)
         self.get_data_signal.connect(self.getOnce_slot)
 
-        
+    def position(self):
+        pos = self.y.index(max(self.y))
+        self.ui.lcd_pos.display(round(self.x[pos],2))    
 
     def plotUpdate(self):
-        self.ui.graphicsView.plot(self.y, pen='k', symbol='o', symbolPen='k', symbolSize=0, clear=True)
+        # Филтрация Savitzky-Golay (не уверен что в этом есть смысл)
+        #tmp = savgol_filter(self.y, 5, 3)
+        #self.ui.graphicsView.plot(self.x, tmp, pen='k', symbol=None, symbolPen='k', clear=True)
+        try:
+            self.ui.graphicsView.plot(self.x, self.y, pen='k', symbol=None, symbolPen='k', clear=True)
+            self.position()
+        except:
+            pass
+        #plot = self.ui.graphicsView.plot(self.x, tmp, pen='g', symbol=None, symbolPen='k', clear=True)
+        
         #print(round(1/(self.timer.elapsed()/1000),1))  // FPS TEST
         if self.start_flag == True:
             self.get_data_signal.emit()
@@ -59,16 +70,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def graphInit(self):
         self.ui.graphicsView.setBackground('w') # backgroung color
-
+        self.ui.graphicsView.visibleRange()
         # X axis
         self.ui.graphicsView.setLabel('bottom', 'Position', color='k', **{'font-size':'12pt'}) # label
         self.ui.graphicsView.getAxis('bottom').setPen(pg.mkPen(color='k', width = 1)) # axis style
-        self.ui.graphicsView.setXRange(0, 3648) # axis size
+        self.ui.graphicsView.setXRange(self.disp, 3648*self.disp) # axis size
 
         # Y axis
-        self.ui.graphicsView.setLabel('left', 'Intensity', color='k', **{'font-size':'12pt'})
+        self.ui.graphicsView.setLabel('left', 'Intensity(a.e.)', color='k', **{'font-size':'12pt'})
         self.ui.graphicsView.getAxis('left').setPen(pg.mkPen(color='k', width = 1))
-        self.ui.graphicsView.setYRange( 0, 4096)
+        self.ui.graphicsView.setYRange(100, 2400)
 
     def getAvaliablePorts(self):
         ports = QSerialPortInfo.availablePorts()
@@ -83,31 +94,8 @@ class MainWindow(QtWidgets.QMainWindow):
             entry.triggered.connect(self.slotConnect)
             entry.setText(port)
 
-    def getBaudRate(self):
-        for baudRate in ["2400", "4800", "9600", "19200", "57600", "115200"]:
-            entry = QAction(baudRate, self)
-            self.ui.menuBaudRate.addAction(entry)
-            entry.triggered.connect(lambda bVal, menuItem=baudRate: self.setBaudRate(menuItem))
-            entry.setText(baudRate)
-
     def setPort(self, portItem):
         self.serial.setPortName(portItem)
-
-    def setBaudRate(self, menuItem):
-        if menuItem == "2400":
-            self.serial.setBaudRate(QSerialPort.Baud2400)
-        elif menuItem == "4800":
-            self.serial.setBaudRate(QSerialPort.Baud4800)
-        elif menuItem == "9600":
-            self.serial.setBaudRate(QSerialPort.Baud9600)
-        elif menuItem == "19200":
-            self.serial.setBaudRate(QSerialPort.Baud19200)
-        elif menuItem == "57600":
-            self.serial.setBaudRate(QSerialPort.Baud57600)
-        elif menuItem == "115200":
-            self.serial.setBaudRate(QSerialPort.Baud115200) 
-
-        self.ui.statusbar.showMessage("BaudRate is: {}".format(menuItem))
 
     def slotConnect(self):
         self.serial.setBaudRate(QSerialPort.Baud115200) 
@@ -129,11 +117,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.data_isReady_signal.emit()
             if self.data_flag == 1:
                 try:
-                    self.y.append(int(str(tmpString.data(), encoding='utf-8').replace("\n","")))
+                    self.y.append(4096 - int(str(tmpString.data(), encoding='utf-8').replace("\n","")))
                 except:
                     self.y.append(0)
                 
-                #self.y.append(tmpString)
             if tmpString == b'begin\n':
                 self.data_flag = 1
                 self.y = []

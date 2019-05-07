@@ -93,6 +93,47 @@
      </size>
     </property>
    </widget>
+   <widget class="QWidget" name="verticalLayoutWidget_2">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>299</y>
+      <width>91</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_2">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="font">
+        <font>
+         <pointsize>11</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>Position</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLCDNumber" name="lcd_pos">
+       <property name="styleSheet">
+        <string notr="true">background-color: rgb(206, 206, 206);
+border-color: rgb(0, 0, 0);
+border-size: 5px;
+text-color: rgb(0, 0, 255);
+color: rgb(0, 0, 255);
+</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -533,14 +574,7 @@
      </property>
      <addaction name="separator"/>
     </widget>
-    <widget class="QMenu" name="menuBaudRate">
-     <property name="title">
-      <string>BaudRate</string>
-     </property>
-     <addaction name="separator"/>
-    </widget>
     <addaction name="menuPort_3"/>
-    <addaction name="menuBaudRate"/>
    </widget>
    <addaction name="menufile"/>
    <addaction name="menusettings"/>
