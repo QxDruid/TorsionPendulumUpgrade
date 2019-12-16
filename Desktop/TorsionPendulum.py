@@ -1,3 +1,6 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from desktop import Ui_MainWindow
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import QAction
@@ -5,6 +8,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtSerialPort import QSerialPort, QSerialPortInfo
 import sys
 import numpy as np
+import scipy as scipy
 #from scipy.signal import savgol_filter
 import pyqtgraph as pg
 
@@ -22,7 +26,9 @@ class MainWindow(QtWidgets.QMainWindow):
     # data variables
     disp = 0.02741
     x = np.arange(0, 3648*disp, disp)
-    y = []
+    y = [] 
+    data_y = np.zeros_like(x)
+    average_count = 0
 
     # flags
     data_flag = False
@@ -43,9 +49,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_Start.clicked.connect(self.start_slot)
         self.ui.pushButton_Stop.clicked.connect(self.stop_slot)
 
+
         self.serial.readyRead.connect(self.serialRead_slot)
         self.data_isReady_signal.connect(self.plotUpdate)
         self.get_data_signal.connect(self.getOnce_slot)
+
+        average = []
+        for i in range(1, 10):
+            average.append(str(i))
+        for average_ in average:
+            entry = QAction(average_, self)
+            self.ui.menuAverage.addAction(entry)
+            entry.triggered.connect(lambda Val, average_to_set=average_: self.average_set(average_to_set))
 
     def position(self):
         pos = self.y.index(max(self.y))
@@ -55,18 +70,31 @@ class MainWindow(QtWidgets.QMainWindow):
         # Филтрация Savitzky-Golay (не уверен что в этом есть смысл)
         #tmp = savgol_filter(self.y, 5, 3)
         #self.ui.graphicsView.plot(self.x, tmp, pen='k', symbol=None, symbolPen='k', clear=True)
-        try:
-            self.ui.graphicsView.plot(self.x, self.y, pen='k', symbol=None, symbolPen='k', clear=True)
-            self.position()
-        except:
-            pass
-        #plot = self.ui.graphicsView.plot(self.x, tmp, pen='g', symbol=None, symbolPen='k', clear=True)
-        
-        #print(round(1/(self.timer.elapsed()/1000),1))  // FPS TEST
-        if self.start_flag == True:
-            self.get_data_signal.emit()
-            #self.timer.start() // FPS TEST 
 
+        if ui.radioButton_interpolate.isChecked():
+            f =  scipy.interp1d(x, y)
+            self.y = f(self.x)
+        # если включена интерполяция то делаем интерполяцию данных
+        if aver > 1:
+            data_y = data_y + y
+            aver = aver - 1
+        else:
+            data_y = data_y + y
+
+
+            try:
+                self.ui.graphicsView.plot(self.x, self.y, pen='k', symbol=None, symbolPen='k', clear=True)
+                self.position()
+                aver = average_count
+                data_y = np.zeros_like(self.x)
+            except:
+                pass
+            #plot = self.ui.graphicsView.plot(self.x, tmp, pen='g', symbol=None, symbolPen='k', clear=True)
+        
+            #print(round(1/(self.timer.elapsed()/1000),1))  // FPS TEST
+            if self.start_flag == True:
+                self.get_data_signal.emit()
+                #self.timer.start() // FPS TEST 
 
     def graphInit(self):
         self.ui.graphicsView.setBackground('w') # backgroung color
@@ -94,6 +122,7 @@ class MainWindow(QtWidgets.QMainWindow):
             entry.triggered.connect(self.slotConnect)
             entry.setText(port)
 
+
     def setPort(self, portItem):
         self.serial.setPortName(portItem)
 
@@ -108,6 +137,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.statusbar.showMessage("{} connected".format(self.serial.portName()))
         else:
              self.ui.statusbar.showMessage("Cannot connect to device on port {}".format(self.serial.portName()))
+
+    def average_set(self, average_):
+        self.average_count = int(average_)
+        self.ui.statusbar.showMessage("Average count: {}".format(self.average_count))
 
     def serialRead_slot(self):
         while self.serial.canReadLine():
@@ -125,7 +158,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.data_flag = 1
                 self.y = []
                 self.serial.write('n'.encode())
-    
         
     def getOnce_slot(self):
         self.serial.write('g'.encode())
@@ -141,4 +173,4 @@ app = QtWidgets.QApplication([])
 application = MainWindow()
 application.show()
 
-sys.exit(app.exec())
+sys.exit(app.exec_())
